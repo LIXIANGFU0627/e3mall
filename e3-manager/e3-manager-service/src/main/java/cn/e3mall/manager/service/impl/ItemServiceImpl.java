@@ -3,16 +3,28 @@ package cn.e3mall.manager.service.impl;
 import java.util.Date;
 import java.util.List;
 
-import org.jboss.netty.util.internal.StringUtil;
+import javax.annotation.Resource;
+import javax.jms.Destination;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.Session;
+import javax.jms.TextMessage;
+
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jms.core.JmsTemplate;
+import org.springframework.jms.core.MessageCreator;
 import org.springframework.stereotype.Service;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 
+import cn.e3mall.common.jedis.JedisClient;
 import cn.e3mall.common.pojo.EasyUIdateGridResult;
 import cn.e3mall.common.utils.E3Result;
 import cn.e3mall.common.utils.IDUtils;
+import cn.e3mall.common.utils.JsonUtils;
 import cn.e3mall.manager.service.ItemService;
 import cn.e3mall.mapper.TbItemDescMapper;
 import cn.e3mall.mapper.TbItemMapper;
@@ -25,7 +37,17 @@ public class ItemServiceImpl implements ItemService {
 	private TbItemMapper itemMapper;
 	@Autowired
 	private TbItemDescMapper itemDescMapper;
+	@Autowired
+	private JmsTemplate jmsTemplate;
+	@Resource
+	private Destination topicDestination;
+	@Autowired
+	private JedisClient jedisClient;
 	
+	@Value("${REDIS_ITEM_PRE}")
+	private String REDIS_ITEM_PRE;
+	@Value("${ITEM_CACHE_EXPIRE}")
+	private Integer ITEM_CACHE_EXPIRE;
 	@Override
 	public EasyUIdateGridResult getItemList(int page, int rows) {
 		PageHelper.startPage(page, rows);
@@ -42,9 +64,13 @@ public class ItemServiceImpl implements ItemService {
 	}
 	@Override
 	public E3Result addItem(TbItem item, String desc) {
+		try {
 		//向商品表中插入数据,补全
 		Date date = new Date();
-		long itemId = IDUtils.genItemId();
+		final long itemId = IDUtils.genItemId();
+		
+			Thread.sleep(1000);
+		
 		item.setId(itemId);
 		item.setStatus((byte) 1);
 		item.setUpdated(date);
@@ -57,7 +83,19 @@ public class ItemServiceImpl implements ItemService {
 		itemDesc.setItemId(itemId);
 		itemDesc.setItemDesc(desc);
 		itemDescMapper.insert(itemDesc);
-		
+		//发送商品添加消息消息
+		jmsTemplate.send(topicDestination, new MessageCreator() {
+			
+			@Override
+			public Message createMessage(Session session) throws JMSException {
+				TextMessage message = session.createTextMessage(itemId+"");
+				return message;
+			}
+		});
+		} catch (Exception e) {
+			
+			e.printStackTrace();
+		}
 		return E3Result.ok();
 	}
 	@Override
@@ -71,7 +109,57 @@ public class ItemServiceImpl implements ItemService {
 		
 		return E3Result.ok();
 	}
+	@Override
+	public TbItemDesc getItemDescById(long itemId) {
 	
-
+		try {
+			String itemJson = jedisClient.get(REDIS_ITEM_PRE +":"+ itemId+ ":DESC");
+			if(StringUtils.isNotBlank(itemJson)){
+				
+				TbItemDesc itemDesc = JsonUtils.jsonToPojo(itemJson, TbItemDesc.class);
+				
+				return itemDesc;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		TbItemDesc tbItemDesc = itemDescMapper.selectByPrimaryKey(itemId);
+		try {
+			jedisClient.set(REDIS_ITEM_PRE +":"+ itemId+ ":DESC", JsonUtils.objectToJson(tbItemDesc));
+			jedisClient.expire(REDIS_ITEM_PRE +":"+ itemId+ ":DESC", ITEM_CACHE_EXPIRE);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return tbItemDesc;
+	}
+	@Override
+	public TbItem getItemById(long itemId) {
+		try {
+			String itemJson = jedisClient.get(REDIS_ITEM_PRE +":"+ itemId+ ":BASE");
+			if(StringUtils.isNotBlank(itemJson)){
+				
+				TbItem item = JsonUtils.jsonToPojo(itemJson, TbItem.class);
+				
+				return item;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		
+		TbItem item = itemMapper.selectByPrimaryKey(itemId);
+		
+		if(item!=null){
+			try {
+				jedisClient.set(REDIS_ITEM_PRE +":"+ itemId+ ":BASE", JsonUtils.objectToJson(item));
+				jedisClient.expire(REDIS_ITEM_PRE +":"+ itemId+ ":BASE", ITEM_CACHE_EXPIRE);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return item;
+		}
+		return null;
+	
+	}
+	
 
 }

@@ -12,10 +12,11 @@
 	<mvc:resources location="/css/" mapping="/css/**"/>  -->
 	<!-- 全局异常处理器 -->
 	<bean class="cn.e3mall.search.exception.GlobalExceptionResolver"></bean>
-		<!-- 引用dubbo服务 -->
+				
+		
+ <!-- 引用dubbo服务 -->
 	<dubbo:application name="e3-search-web"/>
 	<dubbo:registry protocol="zookeeper" address="192.168.119.128:2181"/>	
-	<!-- <dubbo:reference interface="cn.e3mall.search.service.SearchService" id="searchService" />
- -->	
+	<dubbo:reference interface="cn.e3mall.search.service.SearchService" id="searchService" />
 	
 </beans>

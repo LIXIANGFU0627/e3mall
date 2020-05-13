@@ -33,14 +33,6 @@
 		<constructor-arg value="addItemTopic" />
 	</bean>
 	<!-- 接收消息 -->
-	<!-- 配置监听器 -->
-	<bean id="myMessageListener" class="cn.e3mall.search.message.MyMessageListener"></bean>
-	<!-- 消息监听容器 -->
-	<bean class="org.springframework.jms.listener.DefaultMessageListenerContainer">
-		<property name="connectionFactory" ref="connectionFactory" />
-		<property name="destination" ref="queueDestination" />
-		<property name="messageListener" ref="myMessageListener" />
-	</bean>
 	<bean id="itemChangeListener" class="cn.e3mall.search.message.ItemChangeListener"></bean>
 	<!-- 消息监听容器 -->
 	<bean class="org.springframework.jms.listener.DefaultMessageListenerContainer">
