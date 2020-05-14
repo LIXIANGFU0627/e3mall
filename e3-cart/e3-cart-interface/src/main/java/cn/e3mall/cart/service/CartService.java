@@ -11,4 +11,5 @@ public interface CartService {
 	List<TbItem> getCartList(Long userId);
 	E3Result updateCartItemNum(Long userId, Long itemId, Integer num);
 	E3Result deleteCartItemById(Long userId, Long itemId);
+	E3Result clearCartByUserId(Long id);
 }
